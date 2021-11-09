@@ -1,16 +1,19 @@
-package medium.objects;
+package medium.objects.particles;
+
+import medium.Medium;
+import medium.misc.Location;
+import medium.objects.Form;
 
 import java.awt.Color;
-import java.util.Arrays;
 
 public abstract class Particle extends Form {
     
-    public Particle(Type type) {
-        this(null, type);
+    public Particle(String id, Type type) {
+        this(id, null, type);
     }
 
-    public Particle(Form superForm, Type type) {
-        super(1, 1, superForm);
+    public Particle(String id, Form superForm, Type type) {
+        super(1, 1, id, superForm);
         this.type = type;
         this.color = new Color[getSizeX()][getSizeY()];
         for (int x = 0; x < getSizeX(); x++) {
@@ -26,8 +29,7 @@ public abstract class Particle extends Form {
     private double ddy = 0.0;
     private double dx = 0.0;
     private double dy = 0.0;
-    private double x = 0.0;
-    private double y = 0.0;
+    private Location previousLocation = new Location(0, 0);
 
     public Type getType() {
         return type;
@@ -39,21 +41,25 @@ public abstract class Particle extends Form {
     }
 
     @Override
-    public void check(Form form) {
-    }
-
-    @Override
-    public boolean set(int x, int y) {
-        return this.set((double) x, (double) y);
-    }
-
-    public boolean set(double x, double y) {
-        if (super.set((int) x, (int) y)) {
-            this.x = x;
-            this.y = y;
-            return true;
+    public boolean setPosition(double x, double y) {
+        if (!Medium.getMedium().doesCollide(this, (int) x, (int) y)) {
+            this.previousLocation = getLocation();
+            return super.setPosition(x, y);
         }
         return false;
+    }
+
+    public Location getFarthestOpen(double velX, double velY) {
+        double rate = velY / velX;
+        double d = Math.sqrt(Math.pow(velX, 2) + Math.pow(velY, 2));
+        for (double i = Math.ceil(d); i >= 0; i -= 0.5) {
+            double y = (rate * i + this.getY()) * (velY < 0 ? -1 : 1);
+            double x = (i + this.getX()) * (velX < 0 ? -1 : 1);
+            if (!Medium.getMedium().doesCollide(this, (int) x, (int) y)) {
+                return new Location(x, y);
+            }
+        }
+        return new Location(getX(), getY());
     }
 
     public void setVelocity(double velX, double velY) {
@@ -73,15 +79,16 @@ public abstract class Particle extends Form {
     public void rule() {
         this.dx += this.ddx;
         this.dy += this.ddy;
-        this.x += this.dx;
-        this.y += this.dy;
-        if (!set(this.x, this.y)) {
-            this.ddx *= -1;
-            this.ddy *= -1;
-            this.dx *= -1;
-            this.dy *= -1;
-            this.x += this.dx;
-            this.y += this.dy;
+        boolean b = setPosition(getX() + dx, getY() + dy);
+        if (!b) {
+            boolean bounceX = Medium.getMedium().doesCollide(this, (int) (getX() + dx), getY());
+            boolean bounceY = Medium.getMedium().doesCollide(this, getX(), (int) (getY() + dy));
+            System.out.println(bounceY);
+            Location farthestOpen = getFarthestOpen(this.dx, this.dy);
+            setPosition(farthestOpen);
+            System.out.println(farthestOpen);
+            this.dx *= (bounceX ? -1 : 1);
+            this.dy *= (bounceY ? -1 : 1);
         }
     }
 
@@ -94,16 +101,6 @@ public abstract class Particle extends Form {
                 this.color[i][j] = type.getColor();
             }
         }
-    }
-
-    @Override
-    public int getX() {
-        return (int) this.x;
-    }
-
-    @Override
-    public int getY() {
-        return (int) this.y;
     }
 
     public double getAccelerationY() {

@@ -5,20 +5,25 @@ import java.util.HashSet;
 import java.util.Set;
 
 import medium.Medium;
+import medium.misc.Location;
 
 import java.awt.Color;
 
 public abstract class Form {
     
-    private int x, y, sizeX, sizeY;
+    private Location location = new Location(0, 0);
+    private int sizeX, sizeY;
+    private String id;
     private Form superForm = null;
-    private Set<Form> subForms = new HashSet<>();
+    private final Set<Form> subForms = new HashSet<>();
+    private final Set<Form> subFormsToRemove = new HashSet<>();
 
-    public Form(int sizeX, int sizeY, Form superForm, Form... subForms) {
+    public Form(int sizeX, int sizeY, String id, Form superForm, Form... subForms) {
         this.sizeX = sizeX;
         this.sizeY = sizeY;
         this.output = new Color[sizeX][sizeY];
         this.superForm = superForm;
+        this.id = id;
 
         Collections.addAll(this.subForms, subForms);
         for (Form form : subForms) {
@@ -30,8 +35,15 @@ public abstract class Form {
         for (Form subForm : this.subForms) {
             subForm.update();
         }
+        for (Form subForm : subFormsToRemove) {
+            subForms.remove(subForm);
+        }
 
         this.rule();
+    }
+
+    public void removeSubForm(Form form) {
+        this.subFormsToRemove.add(form);
     }
 
     public abstract void rule();
@@ -53,19 +65,10 @@ public abstract class Form {
         for (Form subForm : subForms) {
             for (int x = 0; x < subForm.sizeX; x++) {
                 for (int y = 0; y < subForm.sizeY; y++) {
-                    output[x + subForm.x][y + subForm.y] = subForm.getOutput()[x][y];
+                    output[x + subForm.getX()][y + subForm.getY()] = subForm.getOutput()[x][y];
                 }
             }
         }
-
-        /**
-         *
-         *
-         * for (int x = 0; x < sizeX; x++) {
-            for (int y = 0; x < sizeY; y++) {
-                if (output[x][y] == null) output[x][y] = Medium.DEFAULT_COLOR;
-            }
-        }**/
 
         precalcEpoch = Medium.EPOCH;
 
@@ -86,29 +89,48 @@ public abstract class Form {
     }
 
     public int getX() {
-        return x;
+        return location.getX();
     }
 
     public int getY() {
-        return y;
+        return location.getY();
     }
 
     public boolean setX(int x) {
-        return set(x, y);
+        return setPosition(x, getY());
+    }
+
+    public boolean setX(double x) {
+        return setPosition(x, getY());
+    }
+
+    public boolean setY(double y) {
+        return setPosition(getX(), y);
     }
 
     public boolean setY(int y) {
-        return set(x, y);
+        return setPosition(getX(), y);
     }
 
-    public boolean set(int x, int y) {
-        if (superForm.isWithin(x, y)) {
-            this.x = x;
-            this.y = y;
+    public Location getLocation() {
+        return location;
+    }
+
+    public boolean setPosition(int x, int y) {
+        return this.setPosition((double) x, (double) y);
+    }
+
+    public boolean setPosition(double x, double y) {
+        if (superForm.isWithin((int) x, (int) y)) {
+            this.location = new Location(x, y);
             updateSuper();
             return true;
         }
         return false;
+    }
+
+    public boolean setPosition(Location loc) {
+        return setPosition(loc.getX(), loc.getY());
     }
 
     public void move(int x, int y) {
@@ -117,31 +139,75 @@ public abstract class Form {
     }
 
     protected void setSize(int x, int y) {
-        this.sizeX = x;
-        this.sizeY = y;
+        if (superForm.isWithin(this.getX(), this.getY(), x, y)) {
+            this.sizeX = x;
+            this.sizeY = y;
+        }
     }
 
     public void updateSuper() {
         superForm.check(this);
     }
 
-    protected abstract void check(Form form);
+    protected void check(Form form) {}
 
     public boolean isWithin(Form form) {
-        return isWithin(form.x, form.y)
-                && isWithin(form.x  + form.sizeX, form.y)
-                && isWithin(form.x,form.y + form.sizeY)
-                && isWithin(form.x + form.sizeX, form.y + form.sizeY);
+        return isWithin(form.getX(), form.getY())
+                && isWithin(form.getX()  + form.sizeX, form.getY())
+                && isWithin(form.getX(),form.getY() + form.sizeY)
+                && isWithin(form.getX() + form.sizeX, form.getY() + form.sizeY);
+    }
+
+
+    public boolean isWithin(int x, int y, int sizeX, int sizeY) {
+        return isWithin(x, y)
+                && isWithin(x  + sizeX, y)
+                && isWithin(x,y + sizeY)
+                && isWithin(x + sizeX, y + sizeY);
     }
 
     public boolean isWithin(int x, int y) {
-        return x >= this.x
-                && x <= this.x + this.sizeX
-                && y >= this.y
-                && y <= this.y + this.sizeY;
+        return x >= this.getX()
+                && x <= this.getY() + this.sizeX - 1
+                && y >= this.getX()
+                && y <= this.getY() + this.sizeY - 1;
+    }
+
+    public Form getSubForm(String id) {
+        for (Form subForm : this.subForms) {
+            if (subForm.getID().equals(id)) {
+                return subForm;
+            }
+        }
+        return null;
+    }
+
+    public Form getBottomFormAt(int x, int y, Class<? extends Form>... bottomFormTypes) {
+        Form target = null;
+        if (getSubForms().size() == 0) {
+            for (Class<? extends Form> bottomFormType : bottomFormTypes) {
+                if (bottomFormType.isInstance(this)) {
+                    if (isWithin(x, y)) {
+                        target = this;
+                    }
+                }
+            }
+        } else {
+            for (Form subForm : getSubForms()) {
+                Form bottomForm = subForm.getBottomFormAt(x, y, bottomFormTypes);
+                if (bottomForm != null) {
+                    target = bottomForm;
+                }
+            }
+        }
+        return target;
     }
 
     public abstract String getName();
+
+    public String getID() {
+        return this.id;
+    }
 
     protected Set<Form> getSubForms() {
         return subForms;
