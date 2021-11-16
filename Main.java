@@ -34,8 +34,10 @@ public class Main {
                 excitable2.setValue(25 + i, 25 + j, 255);
             }
         }
-        //medium.add(excitable);
+        medium.add(excitable);
         medium.add(excitable2);
+
+        excitable2.setPosition(50, 50);
 
         //excitable.setPosition(2, 2);
 
